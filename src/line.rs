@@ -25,8 +25,8 @@ impl<I, O> LineBuffer<I, O> where I: Read, O: Write {
             -> io::Result<LineBuffer<I, O>> {
         let tty = try!(TtyGuard::new(tty));
         try!(stdout.write_all(&SetInputMode(InputMode::Notty(())).encode()));
-        try!(stdout.write_all(&SetEchoMode(true).encode()));
-        try!(stdout.write_all(&SetBufferMode(Some(tty.set)).encode()));
+        try!(stdout.write_all(&SetEchoMode(Some(tty.echo)).encode()));
+        try!(stdout.write_all(&SetBufferMode(Some(tty.buffer)).encode()));
         try!(stdout.flush());
         prompt.push(' ');
         Ok(LineBuffer {
@@ -49,7 +49,7 @@ impl<I, O> LineBuffer<I, O> where I: Read, O: Write {
 
         let len = buf.len();
         let mut buffer = Guard { string: unsafe { buf.as_mut_vec() }, init_len: len};
-        let set = self.tty.set;
+        let set = self.tty.buffer;
         loop {
             let (done, used) = {
                 let available = match self.stdin.fill_buf() {
@@ -102,7 +102,7 @@ impl<I, O> Write for LineBuffer<I, O> where I: Read, O: Write {
 impl<I, O> Drop for LineBuffer<I, O> where I: Read, O: Write {
     fn drop(&mut self) {
         let _ = self.stdout.write_all(&SetInputMode(InputMode::Ansi(false)).encode());
-        let _ = self.stdout.write_all(&SetEchoMode(false).encode());
+        let _ = self.stdout.write_all(&SetEchoMode(None).encode());
         let _ = self.stdout.write_all(&SetBufferMode(None).encode());
         let _ = self.stdout.flush();
     }

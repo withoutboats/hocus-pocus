@@ -3,13 +3,14 @@ use std::io;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 
-use notty_encoding::args::BufferSet;
+use notty_encoding::args::{BufferSettings, EchoSettings};
 use termios::{tcsetattr, Termios};
 use termios::os::target::*;
 
 pub struct TtyGuard {
     tty: PathBuf,
-    pub set: BufferSet,
+    pub buffer: BufferSettings,
+    pub echo: EchoSettings
 }
 
 impl TtyGuard {
@@ -26,14 +27,19 @@ impl TtyGuard {
 
         Ok(TtyGuard {
             tty: path,
-            set: BufferSet {
+            buffer: BufferSettings {
                 eol1: termios.c_cc[VEOL],
                 eol2: termios.c_cc[VEOL2],
                 eof: termios.c_cc[VEOF],
                 intr: termios.c_cc[VINTR],
                 susp: termios.c_cc[VSUSP],
                 quit: termios.c_cc[VQUIT],
-            }
+            },
+            echo: EchoSettings {
+                lerase: termios.c_cc[VKILL],
+                lnext: termios.c_cc[VLNEXT],
+                werase: termios.c_cc[VWERASE],
+            },
         })
     }
 
