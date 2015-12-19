@@ -11,36 +11,36 @@ use util::tty::TtyGuard;
 pub struct LineBuffer<I: Read, O: Write> {
     stdin: BufReader<I>,
     stdout: O,
-    prompt: String,
+    prompt: Vec<u8>,
     tty: TtyGuard,
 }
 
 impl LineBuffer<Stdin, Stdout> {
-    pub fn new(prompt: String) -> io::Result<LineBuffer<Stdin, Stdout>> {
+    pub fn new(prompt: &str) -> io::Result<LineBuffer<Stdin, Stdout>> {
         LineBuffer::open(io::stdin(), io::stdout(), prompt, "/dev/tty")
     }
 }
 
 impl<I, O> LineBuffer<I, O> where I: Read, O: Write {
-    pub fn open<T: AsRef<Path>>(stdin: I, mut stdout: O, mut prompt: String, tty: T)
+    pub fn open<T: AsRef<Path>>(stdin: I, mut stdout: O, prompt: &str, tty: T)
             -> io::Result<LineBuffer<I, O>> {
         let tty = try!(TtyGuard::new(tty));
         try!(util::write_esc(&mut stdout, &SetInputMode(InputSettings::LineBufferEcho(
             tty.echo, tty.buffer
         ))));
         try!(stdout.flush());
-        prompt.push(' ');
         Ok(LineBuffer {
             stdin: BufReader::new(stdin),
             stdout: stdout,
-            prompt: prompt,
+            prompt: ["\n", prompt, " "].concat().into_bytes(),
             tty: tty,
         })
     }
 
     pub fn read_line(&mut self, buf: &mut String) -> io::Result<usize> {
 
-        try!(self.stdout.write_all(self.prompt.as_bytes()));
+        try!(self.stdout.write_all(&self.prompt));
+        try!(util::write_esc(&mut self.stdout, &HoldForInput));
         try!(self.stdout.flush());
 
         struct Guard<'a> { string: &'a mut Vec<u8>, init_len: usize }
