@@ -37,6 +37,15 @@ impl<I, O> LineBuffer<I, O> where I: Read, O: Write {
         })
     }
 
+    pub fn loop_with<F: FnMut(&str) -> io::Result<()>>(&mut self, mut func: F) -> io::Result<()> {
+        let mut buffer = String::new();
+        loop {
+            try!(self.read_line(&mut buffer));
+            try!(func(&buffer));
+            buffer.clear();
+        }
+    }
+
     pub fn read_line(&mut self, buf: &mut String) -> io::Result<usize> {
 
         try!(self.stdout.write_all(&self.prompt));
