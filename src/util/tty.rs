@@ -20,8 +20,6 @@ impl TtyGuard {
         let tty = try!(File::open(&path));
 
         let mut termios = try!(Termios::from_fd(tty.as_raw_fd()));
-        termios.c_iflag &= !ICRNL;
-        termios.c_oflag &= !ONLCR;
         termios.c_lflag &= !(ICANON | ECHO);
         try!(tcsetattr(tty.as_raw_fd(), TCSAFLUSH, &termios));
 
@@ -50,8 +48,6 @@ impl Drop for TtyGuard {
         let tty = match File::open(&self.tty) { Ok(tty) => tty, Err(_) => return };
 
         let mut termios = match Termios::from_fd(tty.as_raw_fd()) { Ok(t) => t, _ => return };
-        termios.c_iflag |= ICRNL;
-        termios.c_oflag |= ONLCR;
         termios.c_lflag |= ICANON | ECHO;
         let _ = tcsetattr(tty.as_raw_fd(), TCSAFLUSH, &termios);
     }

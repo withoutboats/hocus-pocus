@@ -2,6 +2,7 @@ extern crate notty_encoding;
 extern crate termios;
 
 mod line;
-mod tty;
+mod util;
 
 pub use line::LineBuffer;
+

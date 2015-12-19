@@ -2,10 +2,11 @@ use std::io::{self, Read, BufRead, Write, Stdin, Stdout, BufReader};
 use std::path::Path;
 use std::str;
 
-use notty_encoding::args::InputMode;
-use notty_encoding::cmds::{EscCode, SetBufferMode, SetEchoMode, SetInputMode};
+use notty_encoding::args::InputSettings;
+use notty_encoding::cmds::{SetInputMode, HoldForInput};
 
-use tty::TtyGuard;
+use util;
+use util::tty::TtyGuard;
 
 pub struct LineBuffer<I: Read, O: Write> {
     stdin: BufReader<I>,
@@ -24,9 +25,9 @@ impl<I, O> LineBuffer<I, O> where I: Read, O: Write {
     pub fn open<T: AsRef<Path>>(stdin: I, mut stdout: O, mut prompt: String, tty: T)
             -> io::Result<LineBuffer<I, O>> {
         let tty = try!(TtyGuard::new(tty));
-        try!(stdout.write_all(&SetInputMode(InputMode::Notty(())).encode()));
-        try!(stdout.write_all(&SetEchoMode(Some(tty.echo)).encode()));
-        try!(stdout.write_all(&SetBufferMode(Some(tty.buffer)).encode()));
+        try!(util::write_esc(&mut stdout, &SetInputMode(InputSettings::LineBufferEcho(
+            tty.echo, tty.buffer
+        ))));
         try!(stdout.flush());
         prompt.push(' ');
         Ok(LineBuffer {
@@ -101,9 +102,7 @@ impl<I, O> Write for LineBuffer<I, O> where I: Read, O: Write {
 
 impl<I, O> Drop for LineBuffer<I, O> where I: Read, O: Write {
     fn drop(&mut self) {
-        let _ = self.stdout.write_all(&SetInputMode(InputMode::Ansi(false)).encode());
-        let _ = self.stdout.write_all(&SetEchoMode(None).encode());
-        let _ = self.stdout.write_all(&SetBufferMode(None).encode());
+        let _ = util::write_esc(&mut self.stdout, &SetInputMode(InputSettings::Ansi(false)));
         let _ = self.stdout.flush();
     }
 }
