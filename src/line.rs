@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::io::{self, Read, BufRead, Write, Stdin, Stdout, BufReader};
 use std::path::Path;
 use std::str;
@@ -37,7 +38,8 @@ impl<I, O> LineBuffer<I, O> where I: Read, O: Write {
         })
     }
 
-    pub fn loop_with<F: FnMut(&str) -> io::Result<()>>(&mut self, mut func: F) -> io::Result<()> {
+    pub fn loop_with<E, F>(&mut self, mut func: F) -> Result<(), Box<Error>>
+    where E: Error, F: FnMut(&str) -> Result<(), Box<Error>> {
         let mut buffer = String::new();
         loop {
             try!(self.read_line(&mut buffer));
