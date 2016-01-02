@@ -3,7 +3,7 @@ use std::io::{self, Read, BufRead, Write, Stdin, Stdout, BufReader};
 use std::path::Path;
 use std::str;
 
-use notty_encoding::args::InputSettings;
+use notty_encoding::args::{InputSettings, BufferSettings};
 use notty_encoding::cmds::{SetInputMode, HoldForInput};
 
 use util;
@@ -49,57 +49,59 @@ impl<I, O> LineBuffer<I, O> where I: Read, O: Write {
     }
 
     pub fn read_line(&mut self, buf: &mut String) -> io::Result<usize> {
-
         try!(self.stdout.write_all(&self.prompt));
         try!(util::write_esc(&mut self.stdout, &HoldForInput));
         try!(self.stdout.flush());
 
-        struct Guard<'a> { string: &'a mut Vec<u8>, init_len: usize }
-        impl<'a> Drop for Guard<'a> {
-            fn drop(&mut self) { unsafe { self.string.set_len(self.init_len); } }
-        }
-
-        let len = buf.len();
-        let mut buffer = Guard { string: unsafe { buf.as_mut_vec() }, init_len: len};
-        let set = self.tty.buffer;
-        loop {
-            let (done, used) = {
-                let available = match self.stdin.fill_buf() {
-                    Ok(buf) => buf,
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                    Err(e)  => return Err(e),
-                };
-                match available.iter().position(|&n| n == b'\n' || set.eol(n as char)) {
-                    Some(idx) if set.eof(available[idx] as char) => {
-                        buffer.string.extend(&available[..idx]);
-                        (true, idx + 1)
-                    }
-                    Some(idx)   => {
-                        buffer.string.extend(&available[..idx+1]);
-                        (true, idx + 1)
-                    }
-                    None        => {
-                        buffer.string.extend(available);
-                        (true, available.len())
-                    }
-                }
-            };
-            self.stdin.consume(used);
-            if done || used == 0 {
-                break;
+        read_line(&mut self.stdin, unsafe { buf.as_mut_vec() }, self.tty.buffer).and_then(|n| {
+            if str::from_utf8(buf.as_bytes()).is_ok() {
+                Ok(n)
+            } else {
+                Err(io::Error::new(io::ErrorKind::InvalidData,
+                                   "stream contained invalid utf8 data"))
             }
-        }
-        match str::from_utf8(&buffer.string[buffer.init_len..]).is_ok() {
-            true    => {
-                let ret = buffer.string.len() - buffer.init_len;
-                buffer.init_len += ret;
-                Ok(ret)
-            }
-            false   => { Err(io::Error::new(io::ErrorKind::InvalidData,
-                                            "stream contained invalid utf8 data")) }
-        }
+        })
     }
 
+}
+
+fn read_line<R: BufRead>(read: &mut R, buf: &mut Vec<u8>, set: BufferSettings)
+-> io::Result<usize> {
+    struct Guard<'a> { string: &'a mut Vec<u8>, init_len: usize }
+    impl<'a> Drop for Guard<'a> {
+        fn drop(&mut self) { unsafe { self.string.set_len(self.init_len); } }
+    }
+    let len = buf.len();
+    let mut buffer = Guard { string: buf, init_len: len };
+    loop {
+        let (done, used) = {
+            let available = match read.fill_buf() {
+                Ok(buf) => buf,
+                Err(ref e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e)  => return Err(e),
+            };
+            match available.iter().position(|&n| n == b'\n' || set.eol(n as char)) {
+                Some(idx) if set.eof(available[idx] as char) => {
+                    buffer.string.extend(&available[..idx]);
+                    (true, idx + 1)
+                }
+                Some(idx)   => {
+                    buffer.string.extend(&available[..idx+1]);
+                    (true, idx + 1)
+                }
+                None        => {
+                    buffer.string.extend(available);
+                    (true, available.len())
+                }
+            }
+        };
+        read.consume(used);
+        if done || used == 0 {
+            let ret = buffer.string.len() - buffer.init_len;
+            ::std::mem::forget(buffer);
+            return Ok(ret)
+        }
+    }
 }
 
 impl<I, O> Write for LineBuffer<I, O> where I: Read, O: Write {
