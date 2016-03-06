@@ -1,10 +1,14 @@
 [package]
+authors = ["Without Boats <woboats@gmail.com>"]
 name = "hocus-pocus"
 version = "0.1.0"
-authors = ["Without Boats <woboats@gmail.com>"]
 
 [dependencies]
+image = "0.7.0"
 termios = "0.2.1"
 
 [dependencies.notty-encoding]
 git = "https://github.com/withoutboats/notty-encoding/"
+
+[dependencies.termpix]
+git = "https://github.com/withoutboats/termpix"
